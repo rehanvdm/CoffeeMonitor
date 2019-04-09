@@ -1,0 +1,146 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Coffee Monitor
+
+Parameters:
+  AppName:
+    Default: coffeemonitor
+    Type: String
+    Description: Name of app
+  AppEnvironment:
+    Type: String
+    AllowedValues:
+      - prod
+    Description: Environment of this stack
+  AppVersion:
+      Type: String
+      Description: Version of this stack in form of SemVer
+  AppBuild:
+      Type: String
+      Description: Build number of this stack
+  TelegramBotToken:
+    Type: String
+    Description: "The bot token received from botfather after using /newbot"
+  TelegramBotChatId:
+    Type: String
+    Description: "Send: chat id?  to the bot, fill this in and then redeploy the stack"
+  MaxTemp:
+    Default: 50
+    Type: String
+    Description: The temperature which we use to determine that a coffee is at a good drinking temperature
+  MinTemp:
+      Default: 40
+      Type: String
+      Description: The temperature which we use to determine that a coffee is now cold
+
+Globals:
+    Function:
+        Timeout: 12
+        Environment:
+          Variables:
+            APPNAME: !Ref AppName
+            ENVIRONMENT: !Ref AppEnvironment
+            VERSION: !Ref AppVersion
+            BUILD: !Ref AppBuild
+        Tags:
+            APPNAME: !Ref AppName
+            ENVIRONMENT: !Ref AppEnvironment
+            VERSION: !Ref AppVersion
+            BUILD: !Ref AppBuild
+
+
+
+Resources:
+    CoffeeMonitorLambda:
+        DependsOn: TelegramSNSTopic
+        Type: AWS::Serverless::Function
+        Properties:
+            FunctionName: !Join ['', ['coffee-monitor-', !Ref AppEnvironment]]
+            Runtime: nodejs8.10
+            CodeUri: lambdas/coffee-monitor/
+            Handler: app.handler
+            Policies:
+              - DynamoDBCrudPolicy:
+                  TableName: !Join ['', ['coffee-monitor-', !Ref AppEnvironment]]
+              - SNSPublishMessagePolicy:
+                  TopicName: !GetAtt TelegramSNSTopic.TopicName
+            Environment:
+              Variables:
+                SNS_TOPIC_TELEGRAM: !Ref TelegramSNSTopic
+                TEMP_MAX: !Ref MaxTemp
+                TEMP_MIN: !Ref MinTemp
+            Events:
+              IoT:
+                Type: IoTRule
+                Properties:
+                  Sql: "SELECT * FROM 'coffee-monitor/#'"
+                  AwsIotSqlVersion: '2016-03-23'
+
+    DynamoDBControlTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: !Join ['', ['coffee-monitor-', !Ref AppEnvironment]]
+        KeySchema:
+          - AttributeName: "PK"
+            KeyType: "HASH"
+          - AttributeName: "SK"
+            KeyType: "RANGE"
+        AttributeDefinitions:
+          - AttributeName: "PK"
+            AttributeType: "S"
+          - AttributeName: "SK"
+            AttributeType: "S"
+        TimeToLiveSpecification:
+          AttributeName: expiration_ts
+          Enabled: true
+        BillingMode: PAY_PER_REQUEST
+
+
+    ApiLambdaFunction:
+      Type: AWS::Serverless::Function
+      Properties:
+        FunctionName: !Join ['', ['coffee-monitor-telegram-api-bot-', !Ref AppEnvironment]]
+        Runtime: nodejs8.10
+        CodeUri: lambdas/telegram-bot/
+        Handler: app.handler
+        Environment:
+          Variables:
+            TELEGRAM_BOT_TOKEN: !Ref TelegramBotToken
+            TELEGRAM_BOT_CHAT_ID: !Ref TelegramBotChatId
+        Events:
+          ReceiveAPIRequest:
+            Type: Api
+            Properties:
+              Path: /{proxy+}
+              Method: ANY
+              RestApiId: !Ref CoffeeMonitorApi
+          SendSNSEvent:
+              Type: SNS
+              Properties:
+                Topic: !Ref TelegramSNSTopic
+
+
+    CoffeeMonitorApi:
+      Type: AWS::Serverless::Api
+      Properties:
+        Name: !Join ['', ['coffee-monitor-api-', !Ref AppEnvironment]]
+        StageName: !Ref AppEnvironment
+
+
+    TelegramSNSTopic:
+      Type: 'AWS::SNS::Topic'
+      Properties:
+        DisplayName: !Join ['', ['coffee-monitor-telegram-bot-', !Ref AppEnvironment]]
+
+
+
+Outputs:
+    ApiURL:
+      Description: "API Gateway endpoint URL"
+      Value: !Sub "https://${CoffeeMonitorApi}.execute-api.${AWS::Region}.amazonaws.com/${AppEnvironment}/"
+    RegisterTelegramBot:
+      Description: "Navigate to the URL below to let your bot push to your API Endpoint"
+      Value: !Sub "https://api.telegram.org/bot${TelegramBotToken}/setWebHook?url=https://${CoffeeMonitorApi}.execute-api.${AWS::Region}.amazonaws.com/${AppEnvironment}/bot_callback"
+    TelegramSNSTopic:
+      Description: "TelegramSNSTopic ARN"
+      Value: !Ref TelegramSNSTopic

@@ -1,0 +1,21 @@
+{
+  "name": "-",
+  "version": "0.0.0",
+  "description": "Tests",
+  "main": "app.js",
+  "author": "SAM CLI",
+  "license": "MIT",
+
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "_sam_build": "sam build --parameter-overrides \"ParameterKey=AppEnvironment,ParameterValue=prod ParameterKey=AppVersion,ParameterValue=0.0.1 ParameterKey=AppBuild,ParameterValue=0 ParameterKey=TelegramBotToken,ParameterValue=XXXX ParameterKey=TelegramBotChatId,ParameterValue=YYYY\" ",
+    "_sam_package": "sam package --output-template-file deploy/packaged.yaml --s3-bucket rehan-sam-packages --s3-prefix coffeemonitor-prod",
+    "_sam_deploy": "sam deploy --template-file deploy/packaged.yaml --stack-name coffeemonitor-prod --capabilities CAPABILITY_IAM --region us-east-1 --parameter-overrides \"AppEnvironment=prod\" \"AppVersion=0.0.1\" \"AppBuild=0\" \"TelegramBotToken=XXXX\" \"TelegramBotChatId=YYYY\"",
+    "sam_deploy": "npm run _sam_build && npm run _sam_package && npm run _sam_deploy"
+  },
+
+  "dependencies": {
+  },
+  "devDependencies": {
+  }
+}

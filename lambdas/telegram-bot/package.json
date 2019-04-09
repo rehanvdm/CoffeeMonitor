@@ -1,0 +1,16 @@
+{
+  "name": "-",
+  "version": "0.0.0",
+  "description": "The API Lambda hit by API Gateway",
+  "main": "app.js",
+  "author": "SAM CLI",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^0.18.0",
+    "aws-sdk": "^2.395.0",
+    "lodash": "^4.17.11",
+    "moment": "^2.24.0",
+    "uuid": "^3.3.2"
+  },
+  "devDependencies": {}
+}
